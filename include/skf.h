@@ -62,7 +62,7 @@ typedef HANDLE          HCONTAINER;
  * @brief 6.4.1 version
  *
  */
-#pragma pack(1)
+#pragma pack(push, 1)
 typedef struct Struct_Version {
     BYTE  major;
     BYTE  minor;

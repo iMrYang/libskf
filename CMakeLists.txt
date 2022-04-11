@@ -130,7 +130,7 @@ message(STATUS "----------------------------------------------------------------
 
 # Include
 include_directories(${CMAKE_CURRENT_LIST_DIR}/include)
-install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/include DESTINATION include FILES_MATCHING PATTERN "*.h")
+install(DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/include/ DESTINATION include FILES_MATCHING PATTERN "*.h")
 
 # Source
 include(${CMAKE_CURRENT_LIST_DIR}/src/CMakeLists.txt)

@@ -11,8 +11,6 @@
 typedef struct SKF_s {
     /* hDLL */
     HANDLE                                           hDLL;
-    /* Flags */
-    BOOL                                             bInit;
     /* Standard SKF API */
     SKF_FUNC_PTR(WaitForDevEvent)                    WaitForDevEvent;
     SKF_FUNC_PTR(CancelWaitForDevEvent)              CancelWaitForDevEvent;
@@ -108,7 +106,8 @@ extern const SKF_Driver_t SKF_Driver_LONGMAI;
  * @brief SKF
  *
  */
-static SKF_t                SKF = {0};
+static BOOL                 bSKFInit = FALSE;
+static SKF_t                SKF;
 static const SKF_Driver_t  *SKF_Drivers[] = {
     &SKF_Driver_CCORE,
     &SKF_Driver_HAITAI,
@@ -123,7 +122,7 @@ static const SKF_Driver_t  *SKF_Drivers[] = {
 #define SKF_FUNC_DEF(name,args,params) \
     ULONG DEVAPI SKF_##name args \
     {\
-        if (NULL == SKF.hDLL) { \
+        if (!bSKFInit || NULL == SKF.hDLL) { \
             return SAR_NOTINITIALIZEERR; \
         } \
         if (NULL == SKF.name) { \
@@ -294,12 +293,35 @@ SKF_FUNC_DEF(CloseHandle, (HANDLE hHandle),
 # define SKF_CHECK_FUNC(condition)  if (NULL == (condition)) { goto err; }
 # define SKF_DL_BIND(h,name)        h.name = (SKF_FUNC_PTR(name))skf_dlsym(h.hDLL, "SKF_" #name)
 
+static void
+skf_clear(void)
+{
+    /* driver */
+    if (SKF.Driver) {
+        if (SKF.Driver->ExitDriver) {
+            SKF.Driver->ExitDriver();
+        }
+        SKF.Driver = NULL;
+    }
+
+    /* dll */
+    if (SKF.hDLL) {
+        skf_dlclose(SKF.hDLL);
+    }
+
+    /* clear */
+    memset(&SKF, 0, sizeof(SKF_t));
+}
+
 ULONG DEVAPI
 SKF_GlobalInit(LPSTR szLibPath)
 {
-    if (SKF.bInit) {
+    if (bSKFInit) {
         return SAR_OK;
     }
+
+    /* clear SKF */
+    memset(&SKF, 0, sizeof(SKF));
 
     /* open lib */
     if (NULL == szLibPath) {
@@ -418,27 +440,22 @@ SKF_GlobalInit(LPSTR szLibPath)
     }
 
     /* flag */
-    SKF.bInit = TRUE;
+    bSKFInit = TRUE;
 
     return SAR_OK;
 err:
-    SKF_GlobalCleanup();
+    skf_clear();
     return SAR_NOTSUPPORTYETERR;
 }
 
 ULONG DEVAPI
 SKF_GlobalCleanup(void)
 {
-    /* SKF_EXTENSION */
-    if (SKF.Driver) {
-        if (SKF.Driver->ExitDriver) {
-            SKF.Driver->ExitDriver();
-        }
-        SKF.Driver = NULL;
+    if (bSKFInit) {
+        skf_clear();
     }
-    /* SKF */
-    skf_dlclose(SKF.hDLL);
-    memset(&SKF, 0, sizeof(SKF_t));
+
+    bSKFInit = FALSE;
 
     return SAR_OK;
 }
@@ -446,7 +463,7 @@ SKF_GlobalCleanup(void)
 ULONG DEVAPI
 SKF_AuthDev(DEVHANDLE hDev)
 {
-    if (NULL == SKF.hDLL) {
+    if (!bSKFInit || NULL == SKF.hDLL) {
         return SAR_NOTINITIALIZEERR;
     }
     if (NULL == SKF.Driver || NULL == SKF.Driver->AuthDev) {
@@ -459,7 +476,7 @@ ULONG DEVAPI
 SKF_ECCDecrypt(HCONTAINER hContainer, BOOL bSignFlag,
     ECCCIPHERBLOB *pCipherBlob, BYTE *pbPlainText,ULONG *pulPlainTextLen)
 {
-    if (NULL == SKF.hDLL) {
+    if (!bSKFInit || NULL == SKF.hDLL) {
         return SAR_NOTINITIALIZEERR;
     }
     if (NULL == SKF.Driver || NULL == SKF.Driver->ECCDecrypt) {
@@ -473,7 +490,7 @@ ULONG DEVAPI
 SKF_RSADecrypt(HCONTAINER hContainer, BYTE *pbCipherText, ULONG ulCipherTextLen,
     BYTE *pbPlainText, ULONG *pulPlainTextLen)
 {
-    if (NULL == SKF.hDLL) {
+    if (!bSKFInit || NULL == SKF.hDLL) {
         return SAR_NOTINITIALIZEERR;
     }
     if (NULL == SKF.Driver || NULL == SKF.Driver->RSADecrypt) {
